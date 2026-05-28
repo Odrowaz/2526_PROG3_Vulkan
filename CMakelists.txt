@@ -1,0 +1,34 @@
+cmake_minimum_required(VERSION 4.0)
+project(CMakeVulkan)
+
+set(EXEC_TARGET AppPrj)
+file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/src/*.cpp)
+file(GLOB_RECURSE HEADERS ${CMAKE_SOURCE_DIR}/src/*.h ${CMAKE_SOURCE_DIR}/include/*.h)
+
+add_executable(${EXEC_TARGET} ${HEADERS} ${SOURCES})
+set_property(TARGET ${EXEC_TARGET} PROPERTY CXX_STANDARD 20)
+target_include_directories(${EXEC_TARGET} PRIVATE include src)
+
+# _DEBUG macro for debug builds (enables Vulkan validation layers)
+target_compile_definitions(${EXEC_TARGET} PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
+
+# MSVC: enable conformant preprocessor (required for __VA_OPT__)
+if(MSVC)
+    target_compile_options(${EXEC_TARGET} PRIVATE /Zc:preprocessor)
+endif()
+
+# Library linking and Headers import
+find_package(Vulkan REQUIRED)
+find_package(glfw3 REQUIRED)
+
+target_link_libraries(${EXEC_TARGET} PRIVATE
+  Vulkan::Vulkan
+  glfw
+)
+
+# Post build: Copy Resources to bin
+set(ResourcesPath ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+add_custom_command(TARGET ${EXEC_TARGET} POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --cyan "Copy Resources..."
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${ResourcesPath} $<TARGET_FILE_DIR:${EXEC_TARGET}>/resources
+)
