@@ -787,7 +787,7 @@ void VulkanContext::CreateGraphicsPipeline()
     ColorBlend.attachmentCount = 1;
     ColorBlend.pAttachments = &BlendAttachment;     
 
-    VkPipelineRenderingCreateInfo RenderingInfo;
+    VkPipelineRenderingCreateInfo RenderingInfo{};
     RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     RenderingInfo.colorAttachmentCount = 1;
     RenderingInfo.pColorAttachmentFormats = &SwapchainImageFormat;
