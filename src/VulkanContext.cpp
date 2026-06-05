@@ -750,7 +750,7 @@ void VulkanContext::CreateGraphicsPipeline()
     ShaderStages[1].pName = "main";
 
     VkPipelineVertexInputStateCreateInfo VertexInput{};
-    VertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO;
+    VertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
     VkPipelineInputAssemblyStateCreateInfo InputAssembly{};
     InputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
