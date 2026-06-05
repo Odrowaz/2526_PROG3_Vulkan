@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <set>
@@ -84,6 +85,9 @@ void VulkanContext::Init(GLFWwindow* InWindow)
     CreateLogicalDevice();
     CreateSwapchain();
     CreateImageViews();
+
+    CreateGraphicsPipeline();
+
     CreateCommandPool();
     AllocateCommandBuffers();
     CreateSyncObjects();
@@ -636,7 +640,22 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
     RenderInfo.pColorAttachments    = &ColourAttachment;
 
     vkCmdBeginRendering(InCmd, &RenderInfo);
-    // Nothing to draw yet — the clear colour proves the pipeline works
+    
+    vkCmdBindPipeline(InCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline);
+
+    VkViewport Viewport{};
+    Viewport.width = static_cast<float>(SwapchainExtent.width);
+    Viewport.height = static_cast<float>(SwapchainExtent.height);
+    Viewport.minDepth = 0.0f;
+    Viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(InCmd, 0, 1, &Viewport);
+
+    VkRect2D Scissor{};
+    Scissor.extent = SwapchainExtent;
+    vkCmdSetScissor(InCmd, 0, 1, &Scissor);
+
+    vkCmdDraw(InCmd, 3, 1, 0, 0);
+
     vkCmdEndRendering(InCmd);
 
     // Transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR
@@ -669,6 +688,9 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
 
 void VulkanContext::CleanupSwapchain()
 {
+    vkDestroyPipeline(Device, GraphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(Device, PipelineLayout, nullptr);
+
     for (auto Sem : RenderFinishedSemaphores) vkDestroySemaphore(Device, Sem, nullptr);
     for (auto Iv : SwapchainImageViews)       vkDestroyImageView(Device, Iv, nullptr);
     vkDestroySwapchainKHR(Device, Swapchain, nullptr);
@@ -690,4 +712,108 @@ void VulkanContext::RecreateSwapchain()
     CreateSwapchain();
     CreateImageViews();
     CreateRenderFinishedSemaphores();
+}
+
+VkShaderModule VulkanContext::CreateShaderModule(const std::string& InPath)
+{
+    std::ifstream File(InPath, std::ios::ate | std::ios::binary);
+    CHECK_DIE(File.is_open(), "Failed to open shader file");
+
+    size_t FileSize = static_cast<size_t>(File.tellg());
+    std::vector<char> Code(FileSize);
+    File.seekg(0);
+    File.read(Code.data(), FileSize);
+
+    VkShaderModuleCreateInfo CreateInfo{};
+    CreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    CreateInfo.codeSize = Code.size();
+    CreateInfo.pCode = reinterpret_cast<const uint32_t*>(Code.data());
+
+    VkShaderModule Module;
+    CHECK_VK(vkCreateShaderModule(Device, &CreateInfo, nullptr, &Module), "Failed creating shader module");
+    return Module;
+}
+
+void VulkanContext::CreateGraphicsPipeline()
+{
+    VkShaderModule VertModule = CreateShaderModule("resources/shaders/triangle.vert.spv");
+    VkShaderModule FragModule = CreateShaderModule("resources/shaders/triangle.frag.spv");
+
+    VkPipelineShaderStageCreateInfo ShaderStages[2]{};
+    ShaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    ShaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    ShaderStages[0].module = VertModule;
+    ShaderStages[0].pName = "main";
+    ShaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    ShaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    ShaderStages[1].module = FragModule;
+    ShaderStages[1].pName = "main";
+
+    VkPipelineVertexInputStateCreateInfo VertexInput{};
+    VertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_DIVISOR_STATE_CREATE_INFO;
+
+    VkPipelineInputAssemblyStateCreateInfo InputAssembly{};
+    InputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    InputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkPipelineRasterizationStateCreateInfo Rasterizer{};
+    Rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    Rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    Rasterizer.lineWidth = 1.0f;
+    Rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    Rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+    VkDynamicState DynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR }; 
+    VkPipelineDynamicStateCreateInfo DynamicState{};
+    DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    DynamicState.dynamicStateCount = 2;
+    DynamicState.pDynamicStates = DynamicStates;
+
+    VkPipelineViewportStateCreateInfo ViewportState{};
+    ViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    ViewportState.viewportCount = 1;
+    ViewportState.scissorCount = 1;
+
+    VkPipelineMultisampleStateCreateInfo Multisampling{};
+    Multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    Multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState BlendAttachment{};
+    BlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                     VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo ColorBlend{};
+    ColorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    ColorBlend.attachmentCount = 1;
+    ColorBlend.pAttachments = &BlendAttachment;     
+
+    VkPipelineRenderingCreateInfo RenderingInfo;
+    RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    RenderingInfo.colorAttachmentCount = 1;
+    RenderingInfo.pColorAttachmentFormats = &SwapchainImageFormat;
+
+
+    VkPipelineLayoutCreateInfo LayoutInfo{};
+    LayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    CHECK_VK(vkCreatePipelineLayout(Device, &LayoutInfo, nullptr, &PipelineLayout), "Failed creating layout");
+
+    VkGraphicsPipelineCreateInfo PipelineInfo{};
+    PipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    PipelineInfo.pNext = &RenderingInfo;
+    PipelineInfo.stageCount = 2;
+    PipelineInfo.pStages = ShaderStages;
+    PipelineInfo.pVertexInputState = &VertexInput;
+    PipelineInfo.pInputAssemblyState = &InputAssembly;
+    PipelineInfo.pRasterizationState = &Rasterizer;
+    PipelineInfo.pViewportState = &ViewportState;
+    PipelineInfo.pDynamicState = &DynamicState;
+    PipelineInfo.pMultisampleState = &Multisampling;
+    PipelineInfo.pColorBlendState = &ColorBlend;
+    PipelineInfo.layout = PipelineLayout;
+    PipelineInfo.renderPass = VK_NULL_HANDLE;
+
+    CHECK_VK(vkCreateGraphicsPipelines(Device, VK_NULL_HANDLE, 1, &PipelineInfo, nullptr, &GraphicsPipeline), "Failed creating pipeline");
+
+    vkDestroyShaderModule(Device, VertModule, nullptr);
+    vkDestroyShaderModule(Device, FragModule, nullptr);
 }

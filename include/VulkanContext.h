@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <optional>
+#include <string>
 
 struct QueueFamilyIndices
 {
@@ -63,6 +64,10 @@ private:
     bool                         FramebufferResized = false;
     bool                         ValidationEnabled  = false;
 
+    // Pipeline
+    VkPipeline                   GraphicsPipeline = VK_NULL_HANDLE;
+    VkPipelineLayout             PipelineLayout = VK_NULL_HANDLE;
+
     // Initialisation steps (called in order by Init)
     void CreateInstance();
     void SetupDebugMessenger();
@@ -88,4 +93,7 @@ private:
     VkSurfaceFormatKHR      ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& InFormats);
     VkPresentModeKHR        ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& InModes);
     VkExtent2D              ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& InCaps);
+
+    VkShaderModule          CreateShaderModule(const std::string& InPath);
+    void                    CreateGraphicsPipeline();
 };
