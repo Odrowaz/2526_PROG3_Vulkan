@@ -699,9 +699,6 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
 
 void VulkanContext::CleanupSwapchain()
 {
-    vkDestroyPipeline(Device, GraphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(Device, PipelineLayout, nullptr);
-
     for (auto Sem : RenderFinishedSemaphores) vkDestroySemaphore(Device, Sem, nullptr);
     for (auto Iv : SwapchainImageViews)       vkDestroyImageView(Device, Iv, nullptr);
     vkDestroySwapchainKHR(Device, Swapchain, nullptr);
