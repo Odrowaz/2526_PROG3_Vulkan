@@ -73,6 +73,11 @@ private:
     VkBuffer                     VertexBuffer = VK_NULL_HANDLE;
     VkDeviceMemory               VertexBufferMemory = VK_NULL_HANDLE;
 
+    // Model Pipeline
+    VkImage                      DepthImage = VK_NULL_HANDLE;
+    VkDeviceMemory               DepthImageMemory = VK_NULL_HANDLE;
+    VkImageView                  DepthImageView = VK_NULL_HANDLE;
+
     // Initialisation steps (called in order by Init)
     void CreateInstance();
     void SetupDebugMessenger();
@@ -104,4 +109,6 @@ private:
 
     void                    CreateVertexBuffer();
     uint32_t                FindMemoryType(uint32_t InTypeFilter, VkMemoryPropertyFlags InProps);
+
+    void                    CreateDepthResources();
 };

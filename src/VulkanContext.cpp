@@ -89,6 +89,10 @@ void VulkanContext::Init(GLFWwindow* InWindow)
     CreateGraphicsPipeline();
     CreateVertexBuffer();
 
+    // For Model pipeline
+    CreateDepthResources();
+
+
     CreateCommandPool();
     AllocateCommandBuffers();
     CreateSyncObjects();
@@ -622,10 +626,30 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
     ToColourBarrier.subresourceRange.baseArrayLayer  = 0;
     ToColourBarrier.subresourceRange.layerCount      = 1;
 
+    VkImageMemoryBarrier ToDepthBarrier{};
+    if (DepthImageView) {
+        ToDepthBarrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        ToDepthBarrier.srcAccessMask                    = 0;
+        ToDepthBarrier.dstAccessMask                    = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        ToDepthBarrier.oldLayout                        = VK_IMAGE_LAYOUT_UNDEFINED;
+        ToDepthBarrier.newLayout                        = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        ToDepthBarrier.srcQueueFamilyIndex              = VK_QUEUE_FAMILY_IGNORED;
+        ToDepthBarrier.dstQueueFamilyIndex              = VK_QUEUE_FAMILY_IGNORED;
+        ToDepthBarrier.image                            = DepthImage;
+        ToDepthBarrier.subresourceRange.aspectMask      = VK_IMAGE_ASPECT_DEPTH_BIT;
+        ToDepthBarrier.subresourceRange.baseMipLevel    = 0;
+        ToDepthBarrier.subresourceRange.levelCount      = 1;
+        ToDepthBarrier.subresourceRange.baseArrayLayer  = 0;
+        ToDepthBarrier.subresourceRange.layerCount      = 1;
+    }
+
+    VkImageMemoryBarrier Barriers[] = { ToColourBarrier, ToDepthBarrier };
+    uint32_t BarrierCount = DepthImageView ? 2 : 1;
+
     vkCmdPipelineBarrier(InCmd,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        0, 0, nullptr, 0, nullptr, 1, &ToColourBarrier);
+        0, 0, nullptr, 0, nullptr, BarrierCount, Barriers);
 
     // Dynamic rendering — no VkRenderPass or VkFramebuffer needed
     VkClearValue ClearColour = {{{ 0.39f, 0.58f, 0.93f, 1.0f }}}; // cornflower blue
@@ -638,6 +662,16 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
     ColourAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
     ColourAttachment.clearValue  = ClearColour;
 
+    VkRenderingAttachmentInfo DepthAttachment{};
+    if (DepthImageView) {
+        DepthAttachment.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        DepthAttachment.imageView   = DepthImageView;
+        DepthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        DepthAttachment.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        DepthAttachment.storeOp     = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        DepthAttachment.clearValue.depthStencil = { 1.f, 0 };
+    }
+
     VkRenderingInfo RenderInfo{};
     RenderInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
     RenderInfo.renderArea.offset    = { 0, 0 };
@@ -645,6 +679,9 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
     RenderInfo.layerCount           = 1;
     RenderInfo.colorAttachmentCount = 1;
     RenderInfo.pColorAttachments    = &ColourAttachment;
+    if (DepthImageView) {
+        RenderInfo.pDepthAttachment = &DepthAttachment;
+    }
 
     vkCmdBeginRendering(InCmd, &RenderInfo);
     
@@ -699,6 +736,10 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
 
 void VulkanContext::CleanupSwapchain()
 {
+    if (DepthImageView) vkDestroyImageView(Device, DepthImageView, nullptr);
+    if (DepthImage)     vkDestroyImage(Device, DepthImage, nullptr);
+    if (DepthImageMemory) vkFreeMemory(Device, DepthImageMemory, nullptr);
+
     for (auto Sem : RenderFinishedSemaphores) vkDestroySemaphore(Device, Sem, nullptr);
     for (auto Iv : SwapchainImageViews)       vkDestroyImageView(Device, Iv, nullptr);
     vkDestroySwapchainKHR(Device, Swapchain, nullptr);
@@ -719,6 +760,7 @@ void VulkanContext::RecreateSwapchain()
     CleanupSwapchain();
     CreateSwapchain();
     CreateImageViews();
+    CreateDepthResources();
     CreateRenderFinishedSemaphores();
 }
 
@@ -902,4 +944,45 @@ uint32_t VulkanContext::FindMemoryType(uint32_t InTypeFilter, VkMemoryPropertyFl
 
     DIE("Failed to find suitable memory type");
     return 0;
+}
+
+void VulkanContext::CreateDepthResources()
+{
+
+    VkFormat DepthFormat = VK_FORMAT_D32_SFLOAT;
+
+    VkImageCreateInfo ImageInfo{};
+    ImageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ImageInfo.imageType = VK_IMAGE_TYPE_2D;
+    ImageInfo.format = DepthFormat;
+    ImageInfo.extent = { SwapchainExtent.width, SwapchainExtent.height, 1 };
+    ImageInfo.mipLevels = 1;
+    ImageInfo.arrayLayers = 1;
+    ImageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    ImageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ImageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    CHECK_VK(vkCreateImage(Device, &ImageInfo, nullptr, &DepthImage), "Failed to create depth image");
+
+    VkMemoryRequirements MemReqs;
+    vkGetImageMemoryRequirements(Device, DepthImage, &MemReqs);
+
+    VkMemoryAllocateInfo AllocInfo{};
+    AllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    AllocInfo.allocationSize = MemReqs.size;
+    AllocInfo.memoryTypeIndex = FindMemoryType(MemReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    CHECK_VK(vkAllocateMemory(Device, &AllocInfo, nullptr, &DepthImageMemory), "Failed to allocate depth image memory");
+    vkBindImageMemory(Device, DepthImage, DepthImageMemory, 0);
+
+    VkImageViewCreateInfo ViewInfo{};
+    ViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ViewInfo.image = DepthImage;
+    ViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    ViewInfo.format = DepthFormat;
+    ViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    ViewInfo.subresourceRange.baseMipLevel = 0;
+    ViewInfo.subresourceRange.levelCount = 1;
+    ViewInfo.subresourceRange.baseArrayLayer = 0;
+    ViewInfo.subresourceRange.layerCount = 1;
+    CHECK_VK(vkCreateImageView(Device, &ViewInfo, nullptr, &DepthImageView), "Failed to create depth image view");
 }
