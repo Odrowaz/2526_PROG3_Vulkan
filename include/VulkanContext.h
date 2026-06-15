@@ -77,6 +77,13 @@ private:
     VkImage                      DepthImage = VK_NULL_HANDLE;
     VkDeviceMemory               DepthImageMemory = VK_NULL_HANDLE;
     VkImageView                  DepthImageView = VK_NULL_HANDLE;
+    uint32_t                     IndexCount = 0;
+    VkBuffer                     IndexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory               IndexBufferMemory = VK_NULL_HANDLE;
+
+    VkPipeline                   ModelPipeline = VK_NULL_HANDLE;
+    VkPipelineLayout             ModelPipelineLayout = VK_NULL_HANDLE;
+
 
     // Initialisation steps (called in order by Init)
     void CreateInstance();
@@ -111,4 +118,6 @@ private:
     uint32_t                FindMemoryType(uint32_t InTypeFilter, VkMemoryPropertyFlags InProps);
 
     void                    CreateDepthResources();
+    void                    CreateModelPipeline();
+    void                    CreateModelBuffers();
 };

@@ -9,6 +9,9 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include "ObjLoader.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 // ── Validation-layer configuration ───────────────────────────────────
 
@@ -86,12 +89,13 @@ void VulkanContext::Init(GLFWwindow* InWindow)
     CreateSwapchain();
     CreateImageViews();
 
-    CreateGraphicsPipeline();
-    CreateVertexBuffer();
+    // Triangle drawing related
+    // CreateGraphicsPipeline();
+    // CreateVertexBuffer();
 
     // For Model pipeline
     CreateDepthResources();
-
+    CreateModelBuffers();
 
     CreateCommandPool();
     AllocateCommandBuffers();
@@ -158,11 +162,26 @@ void VulkanContext::Cleanup()
 {
     CleanupSwapchain();
 
-    vkDestroyBuffer(Device, VertexBuffer, nullptr);
-    vkFreeMemory(Device, VertexBufferMemory, nullptr);
+    // Triangle related
+    if (GraphicsPipeline) {
+        vkDestroyBuffer(Device, VertexBuffer, nullptr);
+        vkFreeMemory(Device, VertexBufferMemory, nullptr);
 
-    vkDestroyPipeline(Device, GraphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(Device, PipelineLayout, nullptr);
+        vkDestroyPipeline(Device, GraphicsPipeline, nullptr);
+        vkDestroyPipelineLayout(Device, PipelineLayout, nullptr);
+    }
+
+    // Model related
+    if (ModelPipeline) {
+        vkDestroyBuffer(Device, VertexBuffer, nullptr);
+        vkFreeMemory(Device, VertexBufferMemory, nullptr);
+
+        vkDestroyBuffer(Device, IndexBuffer, nullptr);
+        vkFreeMemory(Device, IndexBufferMemory, nullptr);
+
+        vkDestroyPipeline(Device, ModelPipeline, nullptr);
+        vkDestroyPipelineLayout(Device, ModelPipelineLayout, nullptr);
+    }
 
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(Device, ImageAvailableSemaphores[i], nullptr);
@@ -684,12 +703,6 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
     }
 
     vkCmdBeginRendering(InCmd, &RenderInfo);
-    
-    vkCmdBindPipeline(InCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline);
-
-    VkBuffer Buffers[] = { VertexBuffer };
-    VkDeviceSize Offsets[] = { 0 };
-    vkCmdBindVertexBuffers(InCmd, 0, 1, Buffers, Offsets);
 
     VkViewport Viewport{};
     Viewport.width = static_cast<float>(SwapchainExtent.width);
@@ -701,8 +714,33 @@ void VulkanContext::RecordCommandBuffer(VkCommandBuffer InCmd, uint32_t InImageI
     VkRect2D Scissor{};
     Scissor.extent = SwapchainExtent;
     vkCmdSetScissor(InCmd, 0, 1, &Scissor);
+   
+    VkBuffer Buffers[] = { VertexBuffer };
+    VkDeviceSize Offsets[] = { 0 };
+    vkCmdBindVertexBuffers(InCmd, 0, 1, Buffers, Offsets);
 
-    vkCmdDraw(InCmd, VertexCount, 1, 0, 0);
+    // Triangle Related
+    if (GraphicsPipeline) {
+        vkCmdBindPipeline(InCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, GraphicsPipeline);
+        vkCmdDraw(InCmd, VertexCount, 1, 0, 0);
+    } else { // Model related
+        vkCmdBindPipeline(InCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ModelPipeline);
+
+        float Aspect = static_cast<float>(SwapchainExtent.width) / static_cast<float>(SwapchainExtent.height);
+
+        glm::mat4 Model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -2.0f, -4.f));
+
+        glm::mat4 View = glm::lookAt(glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, 1.f, 0.f));
+        glm::mat4 Proj = glm::perspective(glm::radians(60.f), Aspect, 0.1f, 100.f);
+        Proj[1][1] *= -1.f;    // Vulkan default we are using have Y-axis inverted respect to OpenGL.
+
+        glm::mat4 Mvp = Proj * View * Model;
+
+        struct { glm::mat4 Mvp; glm::mat4 Model; } PushData{ Mvp, Model };
+        vkCmdPushConstants(InCmd, ModelPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushData), &PushData);
+        vkCmdBindIndexBuffer(InCmd, IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(InCmd, IndexCount, 1, 0, 0, 0);
+    }
 
     vkCmdEndRendering(InCmd);
 
@@ -985,4 +1023,195 @@ void VulkanContext::CreateDepthResources()
     ViewInfo.subresourceRange.baseArrayLayer = 0;
     ViewInfo.subresourceRange.layerCount = 1;
     CHECK_VK(vkCreateImageView(Device, &ViewInfo, nullptr, &DepthImageView), "Failed to create depth image view");
+}
+
+void VulkanContext::CreateModelBuffers()
+{
+    ModelData Data = LoadObj("resources/models/stormtrooper.obj");
+    VertexCount = Data.VertexCount;
+    IndexCount = Data.IndexCount;
+
+    // Vertex buffer ----------------
+    VkDeviceSize BufferSize = Data.Vertices.size() * sizeof(float);
+
+    VkBufferCreateInfo BufferInfo{};
+    BufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    BufferInfo.size  = BufferSize;
+    BufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    BufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    CHECK_VK(vkCreateBuffer(Device, &BufferInfo, nullptr, &VertexBuffer), "Failed to create vertex buffer");
+
+    VkMemoryRequirements MemReqs;
+    vkGetBufferMemoryRequirements(Device, VertexBuffer, &MemReqs);
+
+    VkMemoryAllocateInfo AllocInfo{};
+    AllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    AllocInfo.allocationSize = MemReqs.size;
+    AllocInfo.memoryTypeIndex = FindMemoryType(MemReqs.memoryTypeBits, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    
+    CHECK_VK(vkAllocateMemory(Device, &AllocInfo, nullptr, &VertexBufferMemory), "Failed to create buffer memory");
+
+    vkBindBufferMemory(Device, VertexBuffer, VertexBufferMemory, 0);
+
+    // Copy vertext data to GPU
+    void* VertBuffData;
+    vkMapMemory(Device, VertexBufferMemory, 0, BufferSize, 0, &VertBuffData);
+    memcpy(VertBuffData, Data.Vertices.data(), BufferSize);
+    vkUnmapMemory(Device, VertexBufferMemory);
+
+    // Index buffer ----------------
+    VkDeviceSize IndexBufSize = Data.Indices.size() * sizeof(float);
+
+    VkBufferCreateInfo IndexBuffInfo{};
+    IndexBuffInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    IndexBuffInfo.size  = IndexBufSize;
+    IndexBuffInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    IndexBuffInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    CHECK_VK(vkCreateBuffer(Device, &IndexBuffInfo, nullptr, &IndexBuffer), "Failed to create index buffer");
+
+    VkMemoryRequirements IndexBuffMemReqs;
+    vkGetBufferMemoryRequirements(Device, IndexBuffer, &IndexBuffMemReqs);
+
+    VkMemoryAllocateInfo IndexBuffAllocInfo{};
+    IndexBuffAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    IndexBuffAllocInfo.allocationSize = IndexBuffMemReqs.size;
+    IndexBuffAllocInfo.memoryTypeIndex = FindMemoryType(IndexBuffMemReqs.memoryTypeBits, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    
+    CHECK_VK(vkAllocateMemory(Device, &IndexBuffAllocInfo, nullptr, &IndexBufferMemory), "Failed to create buffer memory");
+
+    vkBindBufferMemory(Device, IndexBuffer, IndexBufferMemory, 0);
+
+    // Copy index data to GPU
+    void* IndexBuffData;
+    vkMapMemory(Device, IndexBufferMemory, 0, IndexBufSize, 0, &IndexBuffData);
+    memcpy(IndexBuffData, Data.Indices.data(), IndexBufSize);
+    vkUnmapMemory(Device, IndexBufferMemory);
+}
+
+void VulkanContext::CreateModelPipeline()
+{
+    VkShaderModule VertModule = CreateShaderModule("resources/shaders/model.vert.spv");
+    VkShaderModule FragModule = CreateShaderModule("resources/shaders/model.frag.spv");
+
+    VkPipelineShaderStageCreateInfo ShaderStages[2]{};
+    ShaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    ShaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    ShaderStages[0].module = VertModule;
+    ShaderStages[0].pName = "main";
+    ShaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    ShaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    ShaderStages[1].module = FragModule;
+    ShaderStages[1].pName = "main";
+
+
+    VkVertexInputBindingDescription BindingDesc{};
+    BindingDesc.binding   = 0;   // slot index matches vkCmdBindVertexBuffers()
+    BindingDesc.stride    = 8 * sizeof(float);   // pos(3) + normal(3) + uv(2) per vertex
+    BindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    
+    VkVertexInputAttributeDescription AttrDescs[3]{};
+    AttrDescs[0].binding = 0; 
+    AttrDescs[0].location = 0;  // Position
+    AttrDescs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+    AttrDescs[0].offset = 0;
+
+    AttrDescs[1].binding = 0; 
+    AttrDescs[1].location = 1; // Normal
+    AttrDescs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    AttrDescs[1].offset = 3 * sizeof(float);
+
+    AttrDescs[2].binding = 0; 
+    AttrDescs[2].location = 2; // Uvs
+    AttrDescs[2].format = VK_FORMAT_R32G32_SFLOAT;
+    AttrDescs[2].offset = 6 * sizeof(float);
+    
+    VkPipelineVertexInputStateCreateInfo VertexInput{};
+    VertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    VertexInput.vertexBindingDescriptionCount = 1;
+    VertexInput.pVertexBindingDescriptions = &BindingDesc;
+    VertexInput.vertexAttributeDescriptionCount = 3;
+    VertexInput.pVertexAttributeDescriptions = AttrDescs;
+
+    VkPipelineInputAssemblyStateCreateInfo InputAssembly{};
+    InputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    InputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    VkPipelineRasterizationStateCreateInfo Rasterizer{};
+    Rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    Rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    Rasterizer.lineWidth = 1.0f;
+    Rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    Rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+    VkDynamicState DynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR }; 
+    VkPipelineDynamicStateCreateInfo DynamicState{};
+    DynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    DynamicState.dynamicStateCount = 2;
+    DynamicState.pDynamicStates = DynamicStates;
+
+    VkPipelineViewportStateCreateInfo ViewportState{};
+    ViewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    ViewportState.viewportCount = 1;
+    ViewportState.scissorCount = 1;
+
+    VkPipelineMultisampleStateCreateInfo Multisampling{};
+    Multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    Multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineColorBlendAttachmentState BlendAttachment{};
+    BlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                     VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+    VkPipelineColorBlendStateCreateInfo ColorBlend{};
+    ColorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    ColorBlend.attachmentCount = 1;
+    ColorBlend.pAttachments = &BlendAttachment;     
+
+    VkPipelineRenderingCreateInfo RenderingInfo{};
+    RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+    RenderingInfo.colorAttachmentCount = 1;
+    RenderingInfo.pColorAttachmentFormats = &SwapchainImageFormat;
+
+
+    VkPushConstantRange PushRange{};
+    PushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    PushRange.offset = 0;
+    PushRange.size = 2 * sizeof(glm::mat4); // MVP + Model = 128 bytes
+
+    VkPipelineLayoutCreateInfo LayoutInfo{};
+    LayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    LayoutInfo.pushConstantRangeCount = 1;
+    LayoutInfo.pPushConstantRanges = &PushRange;
+    CHECK_VK(vkCreatePipelineLayout(Device, &LayoutInfo, nullptr, &ModelPipelineLayout), "Failed creating layout");
+
+    VkPipelineDepthStencilStateCreateInfo DepthStencil{};
+    DepthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    DepthStencil.depthTestEnable = VK_TRUE;
+    DepthStencil.depthWriteEnable = VK_TRUE;
+    DepthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+
+    VkGraphicsPipelineCreateInfo PipelineInfo{};
+    PipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    PipelineInfo.pNext = &RenderingInfo;
+    PipelineInfo.stageCount = 2;
+    PipelineInfo.pStages = ShaderStages;
+    PipelineInfo.pVertexInputState = &VertexInput;
+    PipelineInfo.pInputAssemblyState = &InputAssembly;
+    PipelineInfo.pRasterizationState = &Rasterizer;
+    PipelineInfo.pViewportState = &ViewportState;
+    PipelineInfo.pDynamicState = &DynamicState;
+    PipelineInfo.pMultisampleState = &Multisampling;
+    PipelineInfo.pColorBlendState = &ColorBlend;
+    PipelineInfo.layout = PipelineLayout;
+    PipelineInfo.pDepthStencilState = &DepthStencil;
+    PipelineInfo.renderPass = VK_NULL_HANDLE;
+
+    CHECK_VK(vkCreateGraphicsPipelines(Device, VK_NULL_HANDLE, 1, &PipelineInfo, nullptr, &ModelPipeline), "Failed creating pipeline");
+
+    vkDestroyShaderModule(Device, VertModule, nullptr);
+    vkDestroyShaderModule(Device, FragModule, nullptr);
 }
