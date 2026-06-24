@@ -10,24 +10,31 @@
 int main() {
   bool VsyncEnabled = false;
   VulkanContext Context;
+
   XWindow Window{800, 600, "Hello Vulkan", Context};
   Window.SetVSync(VsyncEnabled);
 
+  // Model Pipeline
+  VulkanPipeline pipeline(Context, "resources/shaders/model.vert.spv",
+    "resources/shaders/model.frag.spv", 10);
+
+  //Camera
+  Camera mainCamera(60.f, Window.GetAspectRatio(), 0.1f, 100.f);
+
+  // Textures
   Texture stormtrooperTexture(Context, "resources/textures/stormtrooper.png");
   Texture smileTexture(Context, "resources/textures/smile.png");
 
-  Mesh stormtrooperMesh(Context, "resources/models/stormtrooper.obj");
-
-  VulkanPipeline pipeline(Context, "resources/shaders/model.vert.spv",
-                          "resources/shaders/model.frag.spv", 10);
-
+  // Material
   Material stormtrooperMaterial(
       Context, pipeline.GetDescriptorSetLayout(),
       {stormtrooperTexture.GetImageView(), smileTexture.GetImageView()},
       {Context.GetTextureSampler(), Context.GetTextureSampler()});
+      
+  // Mesh
+  Mesh stormtrooperMesh(Context, "resources/models/stormtrooper.obj");
 
-  Camera mainCamera(60.f, Window.GetAspectRatio(), 0.1f, 100.f);
-
+  // Logic Object
   GameObject stormtrooper{Context, stormtrooperMesh, stormtrooperMaterial,
                           pipeline, mainCamera};
 
@@ -83,7 +90,6 @@ int main() {
     else if(Window.KeyPressed(GLFW_KEY_DOWN)) {
       mainCamera.Rotation.x -= 50.f * DeltaTime;
     }
-
     if(Window.KeyPressed(GLFW_KEY_LEFT)) {
       mainCamera.Rotation.y -= 50.f * DeltaTime;
     }
@@ -93,7 +99,9 @@ int main() {
 
     //stormtrooper.Update(DeltaTime);
 
-    Window.Update([&](VkCommandBuffer InCmd) { stormtrooper.Draw(InCmd); });
+    Window.Update([&](VkCommandBuffer InCmd) { 
+      stormtrooper.Draw(InCmd); 
+    });
 
     if (Window.KeyPressed(GLFW_KEY_V) && !buttonPressed) {
       buttonPressed = true;
