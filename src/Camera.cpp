@@ -1,6 +1,5 @@
 #include "Camera.h"
 #include <glm/gtc/matrix_transform.hpp>
-#include <iostream>
 
 glm::mat4 Camera::GetProjectionMatrix() const {
   glm::mat4 Proj = glm::perspective(glm::radians(FOV), AspectRatio, NearPlane, FarPlane);

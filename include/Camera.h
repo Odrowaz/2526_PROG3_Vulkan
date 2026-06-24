@@ -7,6 +7,9 @@ public:
         : FOV(InFOV), AspectRatio(InAspectRatio), NearPlane(InNearPlane), FarPlane(InFarPlane) {}
     glm::mat4 GetProjectionMatrix() const;
     glm::mat4 GetViewMatrix() const;
+
+    void SetAspectRatio(float InAspectRatio) { AspectRatio = InAspectRatio; }
+    void SetFOV(float InFOV) { FOV = InFOV; }
 protected:
     float FOV;
     float AspectRatio;

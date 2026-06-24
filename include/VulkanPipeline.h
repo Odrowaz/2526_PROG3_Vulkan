@@ -10,6 +10,7 @@
 struct PushConstants {
   glm::mat4 Mvp;
   glm::mat4 Model;
+  glm::vec3 CameraPos;
 };
 
 class VulkanPipeline {

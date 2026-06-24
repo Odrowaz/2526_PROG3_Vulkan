@@ -33,10 +33,16 @@ int main() {
       
   // Mesh
   Mesh stormtrooperMesh(Context, "resources/models/stormtrooper.obj");
+  Mesh suzanneMesh(Context, "resources/models/suzanne.obj");
 
   // Logic Object
   GameObject stormtrooper{Context, stormtrooperMesh, stormtrooperMaterial,
                           pipeline, mainCamera};
+  GameObject suzanne{Context, suzanneMesh, stormtrooperMaterial,
+                      pipeline, mainCamera};
+
+  stormtrooper.Position = glm::vec3(-2.f, -1.f, -6.f);
+  suzanne.Position = glm::vec3(2.f, 1.f, -6.f);
 
   bool buttonPressed = false;
   float Rotation = 0.f;
@@ -45,20 +51,21 @@ int main() {
     static float TitleUpdateMaxTime = 1.f;
     static float TitleUpdateElapsed = 0.f;
     static int FrameCount = 0;
-
+    
     float DeltaTime = Window.GetDeltaTime();
     TitleUpdateElapsed += DeltaTime;
     FrameCount++;
-
+    
     if (TitleUpdateElapsed >= TitleUpdateMaxTime) {
       float AvgFps = FrameCount / TitleUpdateElapsed;
       std::string Title = std::format("Vulkan App | DeltaTime: {} - FPS: {}",
-                                      DeltaTime, static_cast<int>(AvgFps));
-      Window.SetTitle(Title);
-      TitleUpdateElapsed -= TitleUpdateMaxTime;
-      FrameCount = 0;
+        DeltaTime, static_cast<int>(AvgFps));
+        Window.SetTitle(Title);
+        TitleUpdateElapsed -= TitleUpdateMaxTime;
+        FrameCount = 0;
     }
-
+      
+    mainCamera.SetAspectRatio(Window.GetAspectRatio());
 
     if( Window.KeyPressed(GLFW_KEY_ESCAPE)) {
       break;
@@ -98,9 +105,11 @@ int main() {
     }
 
     //stormtrooper.Update(DeltaTime);
+    //suzanne.Update(DeltaTime);
 
     Window.Update([&](VkCommandBuffer InCmd) { 
       stormtrooper.Draw(InCmd); 
+      suzanne.Draw(InCmd);
     });
 
     if (Window.KeyPressed(GLFW_KEY_V) && !buttonPressed) {

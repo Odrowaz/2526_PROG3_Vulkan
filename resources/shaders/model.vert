@@ -7,6 +7,7 @@ layout(location = 2) in vec2 InTexCoord;
 layout(push_constant) uniform PushConstants {
     mat4 Mvp;
     mat4 Model;
+    vec3 CameraPos;
 } PC;
 
 layout(location = 0) out vec3 FragNormal;
@@ -20,6 +21,6 @@ void main()
     FragNormal = mat3(transpose(inverse(PC.Model))) * InNormal;
     FragTexCoord = InTexCoord;
     vert_world_pos_out = (PC.Model * vec4(InPosition, 1.0)).xyz;
-    camera_pos_out = vec3(0.f, 0.f, -1.f);
+    camera_pos_out = PC.CameraPos;
 }
 
