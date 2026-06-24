@@ -1,4 +1,4 @@
-# Vulkan Renderer — Coursework Project
+# Vulkan Renderer - Coursework Project
 
 A C++/Vulkan renderer started as coursework at AIV, originally provided by the instructor as a single-file example rendering a cube with normal visualization (no texturing, minimal structure).
 
