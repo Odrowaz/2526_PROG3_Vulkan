@@ -18,6 +18,8 @@ XWindow::XWindow(int InWidth, int InHeight, const std::string &InTitle)
   });
 
   VulkanContext::GetInstance().Init(RawWindow);
+
+  SetCursorMode(GLFW_CURSOR_DISABLED); // Hide and capture the cursor
 }
 
 XWindow::~XWindow() {

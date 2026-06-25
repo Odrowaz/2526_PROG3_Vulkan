@@ -27,6 +27,7 @@ glm::mat4 Camera::GetViewMatrix() const {
 }
 
 void Camera::Update(XWindow &Window, float DeltaTime) {
+  
   if (Window.KeyPressed(GLFW_KEY_W)) {
     Position += GetForward() * DeltaTime * 5.f;
   } else if (Window.KeyPressed(GLFW_KEY_S)) {
@@ -38,14 +39,11 @@ void Camera::Update(XWindow &Window, float DeltaTime) {
     Position += GetRight() * DeltaTime * 5.f;
   }
 
-  if (Window.KeyPressed(GLFW_KEY_UP)) {
-    Rotation.x += 50.f * DeltaTime;
-  } else if (Window.KeyPressed(GLFW_KEY_DOWN)) {
-    Rotation.x -= 50.f * DeltaTime;
-  }
-  if (Window.KeyPressed(GLFW_KEY_LEFT)) {
-    Rotation.y -= 50.f * DeltaTime;
-  } else if (Window.KeyPressed(GLFW_KEY_RIGHT)) {
-    Rotation.y += 50.f * DeltaTime;
-  }
+  static glm::vec2 LastMousePosition;
+  glm::vec2 MouseDelta = Window.Mouse() - LastMousePosition;
+  LastMousePosition = Window.Mouse();
+
+  Rotation.y += MouseDelta.x * DeltaTime * 100.f;
+  Rotation.x -= MouseDelta.y * DeltaTime * 100.f;
+
 }

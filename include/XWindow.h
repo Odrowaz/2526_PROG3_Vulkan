@@ -1,7 +1,9 @@
 #pragma once
 
+#include <GLFW/glfw3.h>
 #include <string>
-#include <functional>
+#include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 #include "VulkanContext.h"
 
 class XWindow
@@ -17,6 +19,13 @@ public:
     int GetWidth() const;
     int GetHeight() const;
     float GetAspectRatio() const;
+    void SetCursorMode(int Mode) { glfwSetInputMode(RawWindow, GLFW_CURSOR, Mode); }
+    glm::vec2 Mouse() const {
+        double x, y;
+        glfwGetCursorPos(RawWindow, &x, &y);
+        return glm::vec2(static_cast<float>(x), static_cast<float>(y));
+    }
+
     bool KeyPressed(int Key) const { return glfwGetKey(RawWindow, Key) == GLFW_PRESS; }
 private:
     int Width;
