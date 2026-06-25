@@ -2,6 +2,7 @@
 #include "Material.h"
 #include "Mesh.h"
 #include "Texture.h"
+#include "VulkanContext.h"
 #include "VulkanPipeline.h"
 #include "XWindow.h"
 #include <format>
@@ -9,37 +10,36 @@
 
 int main() {
   bool VsyncEnabled = false;
-  VulkanContext Context;
 
-  XWindow Window{800, 600, "Hello Vulkan", Context};
+  XWindow Window{800, 600, "Hello Vulkan"};
   Window.SetVSync(VsyncEnabled);
 
   // Model Pipeline
-  VulkanPipeline pipeline(Context, "resources/shaders/model.vert.spv",
+  VulkanPipeline pipeline("resources/shaders/model.vert.spv",
     "resources/shaders/model.frag.spv", 10);
 
   //Camera
   Camera mainCamera(60.f, Window.GetAspectRatio(), 0.1f, 100.f);
 
   // Textures
-  Texture stormtrooperTexture(Context, "resources/textures/stormtrooper.png");
-  Texture smileTexture(Context, "resources/textures/smile.png");
+  Texture stormtrooperTexture("resources/textures/stormtrooper.png");
+  Texture smileTexture("resources/textures/smile.png");
 
   // Material
   Material stormtrooperMaterial(
-      Context, pipeline.GetDescriptorSetLayout(),
+      pipeline,
       {stormtrooperTexture.GetImageView(), smileTexture.GetImageView()},
-      {Context.GetTextureSampler(), Context.GetTextureSampler()});
+      {VulkanContext::GetInstance().GetTextureSampler(), VulkanContext::GetInstance().GetTextureSampler()});
       
   // Mesh
-  Mesh stormtrooperMesh(Context, "resources/models/stormtrooper.obj");
-  Mesh suzanneMesh(Context, "resources/models/suzanne.obj");
+  Mesh stormtrooperMesh("resources/models/stormtrooper.obj");
+  Mesh suzanneMesh("resources/models/suzanne.obj");
 
   // Logic Object
-  GameObject stormtrooper{Context, stormtrooperMesh, stormtrooperMaterial,
-                          pipeline, mainCamera};
-  GameObject suzanne{Context, suzanneMesh, stormtrooperMaterial,
-                      pipeline, mainCamera};
+  GameObject stormtrooper{stormtrooperMesh, stormtrooperMaterial,
+                           mainCamera};
+  GameObject suzanne{suzanneMesh, stormtrooperMaterial,
+                      mainCamera};
 
   stormtrooper.Position = glm::vec3(-2.f, -1.f, -6.f);
   suzanne.Position = glm::vec3(2.f, 1.f, -6.f);
@@ -121,7 +121,7 @@ int main() {
     }
   }
 
-  Context.WaitIdle();
+  VulkanContext::GetInstance().WaitIdle();
 
   return 0;
 }

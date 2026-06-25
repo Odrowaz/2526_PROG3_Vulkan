@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <sys/stat.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -25,6 +26,12 @@ struct SwapchainSupportDetails
 class VulkanContext
 {
 public:
+
+    static VulkanContext& GetInstance() {
+        static VulkanContext context;
+        return context;
+    }
+
     static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
     void Init(GLFWwindow* InWindow);
@@ -47,10 +54,8 @@ public:
 
     void NotifyFramebufferResized() { FramebufferResized = true; }
 
-    std::pair<VkImage, VkDeviceMemory>  CreateTexture(std::string InPath);
-    VkImageView                         CreateTextureImageView(VkImage TextureImage);
-
 private:
+    VulkanContext() = default;
     GLFWwindow*                  Window = nullptr;
 
     // Core

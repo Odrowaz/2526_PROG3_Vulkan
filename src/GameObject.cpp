@@ -1,11 +1,10 @@
 #include "GameObject.h"
 #include "Camera.h"
+#include "Material.h"
 #include <glm/gtc/matrix_transform.hpp>
 
-GameObject::GameObject(VulkanContext &Context, Mesh &Mesh, Material &Material,
-                       VulkanPipeline &Pipeline, Camera &InCamera)
-    : ObjectMesh(Mesh), Context(Context), ObjectMaterial(Material),
-      ObjectPipeline(Pipeline), MainCamera(InCamera) {}
+GameObject::GameObject(Mesh &Mesh, Material &Material, Camera &InCamera)
+    : ObjectMesh(Mesh), ObjectMaterial(Material), MainCamera(InCamera) {}
 
 void GameObject::Update(float DeltaTime) { 
     Rotation.y += 25.f * DeltaTime; 
@@ -23,7 +22,9 @@ void GameObject::Draw(VkCommandBuffer InCmd) {
 
   struct {glm::mat4 Mvp; glm::mat4 Model;} VertexData = {Mvp, Model};
 
-  ObjectPipeline.Draw(InCmd, ObjectMesh, ObjectMaterial, {
+  ObjectMaterial.Bind(InCmd);
+
+  ObjectMaterial.GetPipeline().SetPushConstants(InCmd, {
     {
           VK_SHADER_STAGE_VERTEX_BIT,
           2 * sizeof(glm::mat4),
@@ -37,6 +38,9 @@ void GameObject::Draw(VkCommandBuffer InCmd) {
           &MainCamera.Position
         }
   });
+
+  ObjectMesh.Draw(InCmd);
+
 }
 
 GameObject::~GameObject() {}

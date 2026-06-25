@@ -1,13 +1,13 @@
 #pragma once
-#include "VulkanContext.h"
+#include <string>
 #include <vulkan/vulkan.h>
 
 class Mesh {
-  friend class VulkanPipeline;
-
 public:
-  Mesh(VulkanContext &InContext, std::string InPath);
+  Mesh(std::string InPath);
   ~Mesh();
+
+  void Draw(VkCommandBuffer InCommand);
 
 private:
   VkDevice Device = VK_NULL_HANDLE;

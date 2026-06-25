@@ -2,17 +2,18 @@
 #include "Common.h"
 #include <vector>
 #include <vulkan/vulkan.h>
+#include "VulkanContext.h"
 #include "VulkanPipeline.h"
 
-Material::Material(VulkanContext &Context, VkDescriptorSetLayout DescriptorSetLayout,
+Material::Material(VulkanPipeline& InPipeline,
                    const std::vector<VkImageView> &TextureImageViews, const std::vector<VkSampler> &TextureSamplers)
-    : Context(Context), Device(Context.GetDevice()), DescriptorSetLayout(DescriptorSetLayout) {
+    : Device(VulkanContext::GetInstance().GetDevice()), Pipeline(InPipeline) {
 
   VkDescriptorSetAllocateInfo AllocInfo{};
   AllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  AllocInfo.descriptorPool = Context.GetDescriptorPool();
+  AllocInfo.descriptorPool = VulkanContext::GetInstance().GetDescriptorPool();
   AllocInfo.descriptorSetCount = 1;
-  AllocInfo.pSetLayouts = &DescriptorSetLayout;
+  AllocInfo.pSetLayouts = InPipeline.GetDescriptorSetLayout();
 
   CHECK_VK(vkAllocateDescriptorSets(Device, &AllocInfo, &DescriptorSet),
            "Failed to allocate descriptor set");
@@ -41,5 +42,12 @@ Material::Material(VulkanContext &Context, VkDescriptorSetLayout DescriptorSetLa
 }
 
 Material::~Material() {
-  vkFreeDescriptorSets(Device, Context.GetDescriptorPool(), 1, &DescriptorSet);
+  vkFreeDescriptorSets(Device, VulkanContext::GetInstance().GetDescriptorPool(), 1, &DescriptorSet);
+}
+
+void Material::Bind(VkCommandBuffer InCmd) {
+    Pipeline.Bind(InCmd);
+    vkCmdBindDescriptorSets(InCmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          this->Pipeline.GetPipelineLayout(), 0, 1, &DescriptorSet,
+                          0, nullptr);
 }

@@ -1,9 +1,10 @@
 #include "Mesh.h"
 #include "Common.h"
 #include "ObjLoader.h"
+#include "VulkanContext.h"
 
 
-Mesh::Mesh(VulkanContext &InContext, std::string InPath) : Device(InContext.GetDevice()) {
+Mesh::Mesh(std::string InPath) : Device(VulkanContext::GetInstance().GetDevice()) {
   ModelData Data = LoadObj(InPath);
   std::cout << "Loaded model with " << Data.VertexCount << " vertices and "
             << Data.IndexCount << " indices.\n";
@@ -28,7 +29,7 @@ Mesh::Mesh(VulkanContext &InContext, std::string InPath) : Device(InContext.GetD
   VkMemoryAllocateInfo AllocInfo{};
   AllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   AllocInfo.allocationSize = MemReqs.size;
-  AllocInfo.memoryTypeIndex = InContext.FindMemoryType(
+  AllocInfo.memoryTypeIndex = VulkanContext::GetInstance().FindMemoryType(
       MemReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
@@ -62,7 +63,7 @@ Mesh::Mesh(VulkanContext &InContext, std::string InPath) : Device(InContext.GetD
   IndexBuffAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   IndexBuffAllocInfo.allocationSize = IndexBuffMemReqs.size;
   IndexBuffAllocInfo.memoryTypeIndex =
-      InContext.FindMemoryType(IndexBuffMemReqs.memoryTypeBits,
+      VulkanContext::GetInstance().FindMemoryType(IndexBuffMemReqs.memoryTypeBits,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
@@ -85,4 +86,13 @@ Mesh::~Mesh() {
 
   vkDestroyBuffer(Device, VertexBuffer, nullptr);
   vkFreeMemory(Device, VertexBufferMemory, nullptr);
+}
+
+void Mesh::Draw(VkCommandBuffer InCmd) {
+    VkBuffer Buffers[] = {VertexBuffer};
+  VkDeviceSize Offsets[] = {0};
+  vkCmdBindVertexBuffers(InCmd, 0, 1, Buffers, Offsets);
+
+  vkCmdBindIndexBuffer(InCmd, IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+  vkCmdDrawIndexed(InCmd, IndexCount, 1, 0, 0, 0);
 }

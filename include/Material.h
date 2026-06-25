@@ -1,16 +1,20 @@
 #pragma once
-#include "VulkanContext.h"
+#include "VulkanPipeline.h"
 
 class Material {
-    friend class VulkanPipeline;
-
 public:
-  Material(VulkanContext &Context, VkDescriptorSetLayout DescriptorSetLayout, const std::vector<VkImageView> &TextureImageViews, const std::vector<VkSampler> &TextureSamplers);
-  ~Material();
+  Material(VulkanPipeline& InPipeline, const std::vector<VkImageView> &TextureImageViews, const std::vector<VkSampler> &TextureSamplers);
+  virtual ~Material();
+
+  virtual void Bind(VkCommandBuffer InCommand);
+
+  VulkanPipeline& GetPipeline() const {
+    return Pipeline;
+  }
+
 
 private:
-  VulkanContext &Context;
   VkDevice Device = VK_NULL_HANDLE;
-  VkDescriptorSetLayout DescriptorSetLayout = VK_NULL_HANDLE;
+  VulkanPipeline& Pipeline;
   VkDescriptorSet DescriptorSet = VK_NULL_HANDLE;
 };

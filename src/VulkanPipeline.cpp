@@ -1,13 +1,12 @@
 #include "VulkanPipeline.h"
 #include "Common.h"
+#include "VulkanContext.h"
 #include <fstream>
 #include <glm/glm.hpp>
 #include <vector>
 
-VulkanPipeline::VulkanPipeline(VulkanContext &InContext,
-                               std::string VertexShaderPath,
-                               std::string FragmentShaderPath, int MaxViews)
-    : Device(InContext.GetDevice()) {
+VulkanPipeline::VulkanPipeline(std::string VertexShaderPath,
+                               std::string FragmentShaderPath, int MaxViews): Device(VulkanContext::GetInstance().GetDevice()) {
   VkShaderModule VertModule = CreateShaderModule(VertexShaderPath);
   VkShaderModule FragModule = CreateShaderModule(FragmentShaderPath);
 
@@ -92,7 +91,8 @@ VulkanPipeline::VulkanPipeline(VulkanContext &InContext,
   VkPipelineRenderingCreateInfo RenderingInfo{};
   RenderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
   RenderingInfo.colorAttachmentCount = 1;
-  RenderingInfo.pColorAttachmentFormats = &InContext.GetSwapchainImageFormat();
+  RenderingInfo.pColorAttachmentFormats =
+      &VulkanContext::GetInstance().GetSwapchainImageFormat();
   RenderingInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
 
   std::vector<VkPushConstantRange> PushRanges(2);
@@ -194,26 +194,16 @@ VulkanPipeline::~VulkanPipeline() {
   vkDestroyDescriptorSetLayout(Device, DescriptorSetLayout, nullptr);
 }
 
-void VulkanPipeline::Draw(VkCommandBuffer InCmd, Mesh &InMesh,
-                          Material &InMaterial,
-                          std::vector<PushConstants> PushDatas) {
-
-  VkBuffer Buffers[] = {InMesh.VertexBuffer};
-  VkDeviceSize Offsets[] = {0};
-  vkCmdBindVertexBuffers(InCmd, 0, 1, Buffers, Offsets);
+void VulkanPipeline::Bind(VkCommandBuffer InCmd) {
 
   vkCmdBindPipeline(InCmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                     this->GraphicsPipeline);
+}
 
-  vkCmdBindDescriptorSets(InCmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          this->PipelineLayout, 0, 1, &InMaterial.DescriptorSet,
-                          0, nullptr);
+void VulkanPipeline::SetPushConstants(VkCommandBuffer InCmd, std::vector<PushConstants> PushDatas) {
 
   for (auto &PushData : PushDatas) {
     vkCmdPushConstants(InCmd, this->PipelineLayout, PushData.stage,
                        PushData.offset, PushData.size, PushData.data);
   }
-
-  vkCmdBindIndexBuffer(InCmd, InMesh.IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
-  vkCmdDrawIndexed(InCmd, InMesh.IndexCount, 1, 0, 0, 0);
 }

@@ -7,7 +7,7 @@
 class XWindow
 {
 public:
-    XWindow(int InWidth, int InHeight, const std::string& InTitle, VulkanContext& InContext);
+    XWindow(int InWidth, int InHeight, const std::string& InTitle);
     ~XWindow();
     void Update(std::function<void(VkCommandBuffer)> DrawCallback);
     bool IsOpened() const;
@@ -17,7 +17,6 @@ public:
     int GetWidth() const;
     int GetHeight() const;
     float GetAspectRatio() const;
-    VulkanContext& GetVulkanContext() { return Context; }
     bool KeyPressed(int Key) const { return glfwGetKey(RawWindow, Key) == GLFW_PRESS; }
 private:
     int Width;
@@ -25,5 +24,4 @@ private:
     std::string Title;
     GLFWwindow* RawWindow;
     float DeltaTime;
-    VulkanContext& Context;
 };

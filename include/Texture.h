@@ -3,10 +3,8 @@
 #include <vulkan/vulkan.h>
 
 class Texture {
-  friend class VulkanPipeline;
-
 public:
-  Texture(VulkanContext &InContext, std::string InPath);
+  Texture(std::string InPath);
   ~Texture();
 
   VkImageView GetImageView() const { return ImageView; }

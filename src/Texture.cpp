@@ -1,11 +1,12 @@
 #include "Texture.h"
 #include "Common.h"
+#include "VulkanContext.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 
-Texture::Texture(VulkanContext &InContext, std::string InPath) {
-  this->Device = InContext.GetDevice();
+Texture::Texture(std::string InPath) {
+  this->Device = VulkanContext::GetInstance().GetDevice();
 
   // Load image with stb_image
   int Width, Height, Channels;
@@ -35,7 +36,7 @@ Texture::Texture(VulkanContext &InContext, std::string InPath) {
   VkMemoryAllocateInfo AllocInfo{};
   AllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   AllocInfo.allocationSize = MemReqs.size;
-  AllocInfo.memoryTypeIndex = InContext.FindMemoryType(
+  AllocInfo.memoryTypeIndex = VulkanContext::GetInstance().FindMemoryType(
       MemReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
@@ -79,7 +80,7 @@ Texture::Texture(VulkanContext &InContext, std::string InPath) {
   AllocInfo = {};
   AllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   AllocInfo.allocationSize = MemReqs.size;
-  AllocInfo.memoryTypeIndex = InContext.FindMemoryType(
+  AllocInfo.memoryTypeIndex = VulkanContext::GetInstance().FindMemoryType(
       MemReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
   CHECK_VK(vkAllocateMemory(Device, &AllocInfo, nullptr, &ImageMemory),
@@ -88,10 +89,10 @@ Texture::Texture(VulkanContext &InContext, std::string InPath) {
   vkBindImageMemory(Device, Image, ImageMemory, 0);
 
   // Copy Buffer to Image
-  VkCommandBuffer Cmd = InContext.BeginSingleTimeCommands();
+  VkCommandBuffer Cmd = VulkanContext::GetInstance().BeginSingleTimeCommands();
 
   // Transition: UNDEFINED -> TRANSFER_DST_OPTIMAL
-  InContext.TransitionImageLayout(Cmd, Image, VK_IMAGE_LAYOUT_UNDEFINED,
+  VulkanContext::GetInstance().TransitionImageLayout(Cmd, Image, VK_IMAGE_LAYOUT_UNDEFINED,
                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
   VkBufferImageCopy Region{};
@@ -109,11 +110,11 @@ Texture::Texture(VulkanContext &InContext, std::string InPath) {
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &Region);
 
   // Transition: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL
-  InContext.TransitionImageLayout(Cmd, Image,
+  VulkanContext::GetInstance().TransitionImageLayout(Cmd, Image,
                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-  InContext.EndSingleTimeCommands(Cmd);
+  VulkanContext::GetInstance().EndSingleTimeCommands(Cmd);
 
   vkDestroyBuffer(Device, TextureBuffer, nullptr);
   vkFreeMemory(Device, TextureBufferMemory, nullptr);
